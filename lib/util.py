@@ -4,6 +4,7 @@ from scipy.stats import mode
 from scipy.spatial import ConvexHull
 import numpy as np
 import math
+import cv2
 from constants import TRAINING_LOCATION, SHAPE
 
 def polyArea(x,y):
@@ -85,6 +86,17 @@ def minimum_bounding_rectangle(points):
     per = 2*(abs(y2-y1)+abs(x2-x1))
     return per, area
 
+def minimum_bounding_circle(points):
+    """
+    Find the smallest bounding rectangle for a set of points.
+    Returns a set of points representing the corners of the bounding box.
+
+    :param points: an nx2 matrix of coordinates
+    :rval: an nx2 matrix of coordinates
+    """
+    c, radius = cv2.minEnclosingCircle(points)
+    return np.pi*(radius**2), 2*np.pi*radius
+
 def areaTriange(p1, p2, p3):
     """
     Determines the area of triangle formed by 3 points (x,y)
@@ -147,7 +159,29 @@ def extract_features(points):
     per =  perimeter(points)
     if area > 0:
         feature.append(per**2/area)
-        triangle_area = maxTriange(points)
+        triangle_area = 1
+        triangle_area, p = minimum_bounding_circle(points)
+        feature.append(triangle_area/area)
+        rect_p, rect_a = minimum_bounding_rectangle(points)
+        feature.append(per/rect_p)
+        feature.append(area**2/(rect_a*triangle_area))
+        return feature
+
+def extract_features_xy(x, y):
+    """
+    Extracts the features from given array of x,y coordinates
+    @param points: Array of x,y coordinates.
+    @returns: array of features.
+    """
+    feature = []
+    points = np.column_stack((x,y))
+    x = points[:,0]
+    y = points[:,1]
+    area = polyArea(x,y)
+    per =  perimeter(points)
+    if area > 0:
+        feature.append(per**2/area)
+        triangle_area, p = minimum_bounding_circle(points)
         feature.append(triangle_area/area)
         rect_p, rect_a = minimum_bounding_rectangle(points)
         feature.append(per/rect_p)
@@ -183,7 +217,7 @@ def l2distance(X,Z=None):
     x,z = G.shape
     x1= np.dot(np.diagonal(innerproduct(X)).reshape(x,1), np.ones((1, z)))
     z1= np.dot(np.diag(innerproduct(Z)).reshape(z,1), np.ones((1,x)))
-    D = np.sqrt(x1 + z1.T - 2*innerproduct(X,Z))
+    D = np.sqrt(abs(x1 + z1.T - 2*innerproduct(X,Z)))
     return D
 
 def findknn(xTr,xTe,k):
